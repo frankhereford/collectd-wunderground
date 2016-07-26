@@ -11,6 +11,9 @@ use Redis;
 
 
 my $redis = Redis->new;
+
+my $ttl = 60 * .5;
+
 my $ua = LWP::UserAgent->new;
 $ua->agent("https://github.com/frankhereford/wunderground-collectd");
 
@@ -24,13 +27,14 @@ foreach my $zip (@zips)
     {
     $conditions = decode_json($response->content);
     }
+
   #print Dumper $conditions, "\n";
 
   $conditions->{'current_observation'}->{'relative_humidity'} =~ s/\%//g;
 
   my %data = (
   $zip . '-temp'	=>	$conditions->{'current_observation'}->{'temp_f'},
-  $zip . '-heatindex'	=>	$conditions->{'current_observation'}->{'heat_index_f'},
+  $zip . '-heatindex'	=>	($conditions->{'current_observation'}->{'heat_index_f'} =~ /NA/i ? 0 : $conditions->{'current_observation'}->{'heat_index_f'}),
   $zip . '-feelslike'	=>	$conditions->{'current_observation'}->{'feelslike_f'},
   $zip . '-pressure'	=>	$conditions->{'current_observation'}->{'pressure_mb'},
   $zip . '-dewpoint'	=>	$conditions->{'current_observation'}->{'dewpoint_f'},
@@ -39,9 +43,17 @@ foreach my $zip (@zips)
   $zip . '-humidity'	=>	$conditions->{'current_observation'}->{'relative_humidity'},
   $zip . '-visibility'	=>	$conditions->{'current_observation'}->{'visibility_mi'},
   $zip . '-windchill'	=>	($conditions->{'current_observation'}->{'windchill_f'} =~ /NA/i ? 0 : $conditions->{'current_observation'}->{'windchill_f'}),
+  $zip . '-precip1h'	=>	$conditions->{'current_observation'}->{'precip_1hr_in'} += 0,
+  $zip . '-preciptoday'	=>	$conditions->{'current_observation'}->{'precip_today_in'} += 0,
   );
 
-  print Dumper \%data, "\n";
+  $redis->setex($zip . '-wunderground', $ttl, $conditions->{'current_observation'}->{'display_location'}->{'city'});
 
+  foreach my $key (keys(%data))
+    {
+    $redis->setex($key, $ttl, $data{$key});
+    }
+
+  #print Dumper \%data, "\n";
   }
 
