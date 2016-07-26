@@ -2,6 +2,8 @@
 
 use strict;
 use lib '.';
+use FindBin;
+use lib "$FindBin::Bin/.";
 use WunderGroundAPIKeyAndZips qw(key zips);
 use JSON;
 use LWP;
@@ -9,15 +11,17 @@ use Data::Dumper;
 use LWP::UserAgent;
 use Redis;
 
-
 my $redis = Redis->new;
 
-my $ttl = 60 * .5;
+my $ttl = 60 * 20;
 
 my $ua = LWP::UserAgent->new;
 $ua->agent("https://github.com/frankhereford/wunderground-collectd");
 
 my @zips = @{zips()};
+
+$redis->setex('wunderground-zips', $ttl, join('/', @zips));
+
 foreach my $zip (@zips)
   {
   my $req = HTTP::Request->new(GET => 'http://api.wunderground.com/api/' . key() . '/conditions/q/' . $zip . '.json');
@@ -36,7 +40,7 @@ foreach my $zip (@zips)
   $zip . '-temp'	=>	$conditions->{'current_observation'}->{'temp_f'},
   $zip . '-heatindex'	=>	($conditions->{'current_observation'}->{'heat_index_f'} =~ /NA/i ? 0 : $conditions->{'current_observation'}->{'heat_index_f'}),
   $zip . '-feelslike'	=>	$conditions->{'current_observation'}->{'feelslike_f'},
-  $zip . '-pressure'	=>	$conditions->{'current_observation'}->{'pressure_mb'},
+  $zip . '-pressure'	=>	$conditions->{'current_observation'}->{'pressure_in'},
   $zip . '-dewpoint'	=>	$conditions->{'current_observation'}->{'dewpoint_f'},
   $zip . '-wind'	=>	$conditions->{'current_observation'}->{'wind_mph'},
   $zip . '-windgust'	=>	$conditions->{'current_observation'}->{'wind_gust_mph'},
